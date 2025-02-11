@@ -597,7 +597,11 @@ def targets_to(targets: List[Dict[str, Any]], device):
 
 
 def get_phrases_from_posmap(
-    posmap: torch.BoolTensor, tokenized: Dict, tokenizer: AutoTokenizer, left_idx: int = 0, right_idx: int = 255
+    posmap: torch.BoolTensor,
+    tokenized: Dict,
+    tokenizer: AutoTokenizer,
+    left_idx: int = 0,
+    right_idx: int = 255
 ):
     assert isinstance(posmap, torch.Tensor), "posmap must be torch.Tensor"
     if posmap.dim() == 1:

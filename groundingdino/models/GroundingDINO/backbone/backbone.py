@@ -142,7 +142,7 @@ class Backbone(BackboneBase):
         num_channels = num_channels_all[4 - len(return_interm_indices) :]
         super().__init__(backbone, train_backbone, num_channels, return_interm_indices)
 
-
+#calcualtion of postional embedding happens here for each img embedding
 class Joiner(nn.Sequential):
     def __init__(self, backbone, position_embedding):
         super().__init__(backbone, position_embedding)

@@ -682,6 +682,7 @@ class SwinTransformer(nn.Module):
         Wh, Ww = x.size(2), x.size(3)
         if self.ape:
             # interpolate the position embedding to the corresponding size
+
             absolute_pos_embed = F.interpolate(
                 self.absolute_pos_embed, size=(Wh, Ww), mode="bicubic"
             )
@@ -770,6 +771,7 @@ def build_swin_transformer(modelname, pretrain_img_size, **kw):
 
     model_para_dict = {
         "swin_T_224_1k": dict(
+            # SSS:
             embed_dim=96, depths=[2, 2, 6, 2], num_heads=[3, 6, 12, 24], window_size=7
         ),
         "swin_B_224_22k": dict(

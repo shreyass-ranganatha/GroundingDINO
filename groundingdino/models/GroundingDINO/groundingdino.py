@@ -45,7 +45,7 @@ from .bertwarper import (
     generate_masks_with_special_tokens_and_transfer_map,
 )
 from .transformer import build_transformer
-from .utils import MLP, ContrastiveEmbed, sigmoid_focal_loss
+from .utils import MLP, ContrastiveEmbed, sigmoid_focal_loss, ContrastiveEmbedPatches
 
 
 class GroundingDINO(nn.Module):
@@ -225,6 +225,8 @@ class GroundingDINO(nn.Module):
         self.refpoint_embed = nn.Embedding(use_num_queries, self.query_dim)
 
     def forward(self, samples: NestedTensor, targets: List = None, **kw):
+        # The forward expects a NestedTensor, which consists of:
+
         """The forward expects a NestedTensor, which consists of:
            - samples.tensor: batched images, of shape [batch_size x 3 x H x W]
            - samples.mask: a binary mask of shape [batch_size x H x W], containing 1 on padded pixels
@@ -299,16 +301,19 @@ class GroundingDINO(nn.Module):
         # import ipdb; ipdb.set_trace()
         if isinstance(samples, (list, torch.Tensor)):
             samples = nested_tensor_from_tensor_list(samples)
+
         if not hasattr(self, 'features') or not hasattr(self, 'poss'):
             self.set_image_tensor(samples)
 
         srcs = []
         masks = []
+        #self.features here stores feature embedding
         for l, feat in enumerate(self.features):
             src, mask = feat.decompose()
             srcs.append(self.input_proj[l](src))
             masks.append(mask)
             assert mask is not None
+
         if self.num_feature_levels > len(srcs):
             _len_srcs = len(srcs)
             for l in range(_len_srcs, self.num_feature_levels):
@@ -317,23 +322,35 @@ class GroundingDINO(nn.Module):
                 else:
                     src = self.input_proj[l](srcs[-1])
                 m = samples.mask
+                # various intpolation methods are applied  various modes are mention in functional.py line 4025 based on input dimension
                 mask = F.interpolate(m[None].float(), size=src.shape[-2:]).to(torch.bool)[0]
+                #These 2D sine-cosine positional embeddings are used to inject spatial information into models
                 pos_l = self.backbone[1](NestedTensor(src, mask)).to(src.dtype)
+
                 srcs.append(src)
                 masks.append(mask)
                 self.poss.append(pos_l)
-
         input_query_bbox = input_query_label = attn_mask = dn_meta = None
+
+        # hs: refined embedding (embedding of last decoder layer)
+        # reference: essentially reference to position of image patch
         hs, reference, hs_enc, ref_enc, init_box_proposal = self.transformer(
             srcs, masks, input_query_bbox, self.poss, input_query_label, attn_mask, text_dict
         )
 
+        # 900 x 256 < position information + image information + text information
+
+        # AFTER THIS
+
+        # NOTE: If I remove loop, will it converge sooner?
         # deformable-detr-like anchor update
         outputs_coord_list = []
         for dec_lid, (layer_ref_sig, layer_bbox_embed, layer_hs) in enumerate(
             zip(reference[:-1], self.bbox_embed, hs)
         ):
+            # layer_delta_unsig: position within grid dimensions
             layer_delta_unsig = layer_bbox_embed(layer_hs)
+            # layer_ref_sig: is the offset from source of image
             layer_outputs_unsig = layer_delta_unsig + inverse_sigmoid(layer_ref_sig)
             layer_outputs_unsig = layer_outputs_unsig.sigmoid()
             outputs_coord_list.append(layer_outputs_unsig)
@@ -346,7 +363,15 @@ class GroundingDINO(nn.Module):
                 for layer_cls_embed, layer_hs in zip(self.class_embed, hs)
             ]
         )
-        out = {"pred_logits": outputs_class[-1], "pred_boxes": outputs_coord_list[-1]}#, "pred_representation": []}
+
+        patch_match = ContrastiveEmbedPatches()
+        r = patch_match(hs[-1])
+
+        out = {
+            "pred_logits": outputs_class[-1],
+            "pred_boxes": outputs_coord_list[-1],
+            "r": r
+        }
 
         # bipartite loss
 

@@ -81,13 +81,6 @@ def load_model(model_config_path, model_checkpoint_path, cpu_only=False):
     return model
 
 
-def min_max(t: torch.Tensor):
-    mx = t.max(dim=-1).values[:, None]
-    mn = t.min(dim=-1).values[:, None]
-
-    return (t - mn) / (mx - mn)
-
-
 def get_grounding_output(model, image, caption, box_threshold, text_threshold=None, with_logits=True, cpu_only=False, token_spans=None):
     assert text_threshold is not None or token_spans is not None, "text_threshould and token_spans should not be None at the same time!"
     caption = caption.lower()
@@ -102,7 +95,7 @@ def get_grounding_output(model, image, caption, box_threshold, text_threshold=No
 
     logits = outputs["pred_logits"].sigmoid()[0]  # (nq, 256)
     boxes = outputs["pred_boxes"][0]  # (nq, 4)
-    r = outputs["r"][0]
+    r = outputs["r"]
 
     # filter output
     if token_spans is None:
@@ -111,18 +104,6 @@ def get_grounding_output(model, image, caption, box_threshold, text_threshold=No
         filt_mask = logits_filt.max(dim=1)[0] > box_threshold
         logits_filt = logits_filt[filt_mask]  # num_filt, 256
         boxes_filt = boxes_filt[filt_mask]  # num_filt, 4
-
-        rf = min_max(r[filt_mask])
-        tbx = []
-        tsc = []
-
-        for ir in rf:
-            bxs = boxes[ir > .8]
-            prs = logits.cpu()[ir > .8]
-
-            print(">> SSS NUMBER OF BBOXES:", bxs.shape)
-            tbx.append(bxs)
-            tsc.append(prs.max(-1).values)
 
         # get phrase
         tokenlizer = model.tokenizer
@@ -164,7 +145,7 @@ def get_grounding_output(model, image, caption, box_threshold, text_threshold=No
         pred_phrases = all_phrases
 
 
-    return boxes_filt, pred_phrases, rf, tbx, tsc
+    return boxes_filt, pred_phrases
 
 
 if __name__ == "__main__":
@@ -194,11 +175,9 @@ if __name__ == "__main__":
     argv = [
         "-c", "/Users/shreyas/Developer/GitHub/GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py",
         "-p", "/Users/shreyas/Downloads/groundingdino_swint_ogc.pth",
-        # "-i", "/Users/shreyas/Developer/GitHub/GroundingDINO/.asset/cats.png",
-        "-i", "/Users/shreyas/Developer/GitHub/GroundingDINO/.asset/cat_dog.jpeg",
+        "-i", "/Users/shreyas/Developer/GitHub/GroundingDINO/.asset/cats.png",
         "-o", "/Users/shreyas/Developer/GitHub/GroundingDINO/logs/now",
         "-t", "cat .",
-        "--box_threshold", "0.6",
         "--cpu-only"]
 
     args = parser.parse_args(argv)
@@ -230,7 +209,7 @@ if __name__ == "__main__":
 
 
     # run model
-    boxes_filt, pred_phrases, rf, tbx, tsc = get_grounding_output(
+    boxes_filt, pred_phrases = get_grounding_output(
         model, image, text_prompt, box_threshold, text_threshold, cpu_only=args.cpu_only, token_spans=eval(f"{token_spans}")
     )
 
@@ -241,13 +220,6 @@ if __name__ == "__main__":
         "size": [size[1], size[0]],  # H,W
         "labels": pred_phrases,
     }
-
-    pred_dict = {
-        "boxes": tbx[0],
-        "size": [size[1], size[0]],  # H,W
-        "labels": [s for s in tsc[0]],
-    }
-
     # import ipdb; ipdb.set_trace()
     image_with_box = plot_boxes_to_image(image_pil, pred_dict)[0]
     image_with_box.save(os.path.join(output_dir, "pred.jpg"))

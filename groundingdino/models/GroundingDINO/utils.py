@@ -256,6 +256,13 @@ class ContrastiveEmbed(nn.Module):
         """
         assert isinstance(text_dict, dict)
 
+        # x: (1, 20906, 256)
+        # y: (4, 256)
+        # yT: (256, 4)
+
+        # x @ yT: (20906, 4)
+        # image patch embedding * text embedding ~ 1
+
         y = text_dict["encoded_text"]
         text_token_mask = text_dict["text_token_mask"]
 
@@ -267,3 +274,17 @@ class ContrastiveEmbed(nn.Module):
         new_res[..., : res.shape[-1]] = res
 
         return new_res
+
+
+class ContrastiveEmbedPatches(nn.Module):
+    def __init__(self, max_text_len=256):
+        """
+        Args:
+            max_text_len: max length of text.
+        """
+        super().__init__()
+        self.max_text_len = max_text_len
+
+    def forward(self, x):
+        r = x @ x.transpose(-1, -2)
+        return r

@@ -707,11 +707,14 @@ class TransformerDecoder(nn.Module):
             #         import ipdb; ipdb.set_trace()
 
             # main process
+            """
+            the query embedding remain fix and only the tgt embedding undergo contatn change after passing thorugh the 6 decoder layers
+            """
             output = layer(
                 tgt=output,
                 tgt_query_pos=query_pos,
-                tgt_query_sine_embed=query_sine_embed,
-                tgt_key_padding_mask=tgt_key_padding_mask,
+                tgt_query_sine_embed=query_sine_embed,#not being used just intializedt
+                tgt_key_padding_mask=tgt_key_padding_mask,#not being used
                 tgt_reference_points=reference_points_input,
                 memory_text=memory_text,
                 text_attention_mask=text_attention_mask,
@@ -739,6 +742,11 @@ class TransformerDecoder(nn.Module):
                 # box_holder = self.bbox_embed(output)
                 # box_holder[..., :self.query_dim] += inverse_sigmoid(reference_points)
                 # new_reference_points = box_holder[..., :self.query_dim].sigmoid()
+
+                # essentially does:
+                # ref = sigmoid(x)
+                # dref = bbox_embed(each decoder)(tgt)
+                # ref = sigmoid(unsigmoid(ref) + dref)
 
                 reference_before_sigmoid = inverse_sigmoid(reference_points)
                 delta_unsig = self.bbox_embed[layer_id](output)
@@ -929,6 +937,7 @@ class DeformableTransformerDecoderLayer(nn.Module):
                 memory_text.transpose(0, 1),
                 key_padding_mask=text_attention_mask,
             )[0]
+            # SSS: tgt2 is basicially a residual layer adding back to tgt to retain values
             tgt = tgt + self.catext_dropout(tgt2)
             tgt = self.catext_norm(tgt)
 
@@ -940,6 +949,8 @@ class DeformableTransformerDecoderLayer(nn.Module):
             level_start_index=memory_level_start_index,
             key_padding_mask=memory_key_padding_mask,
         ).transpose(0, 1)
+
+        # SSS: residual here too and droput to reduce the overfitting
         tgt = tgt + self.dropout1(tgt2)
         tgt = self.norm1(tgt)
 
