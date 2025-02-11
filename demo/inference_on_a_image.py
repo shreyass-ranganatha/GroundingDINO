@@ -92,6 +92,7 @@ def get_grounding_output(model, image, caption, box_threshold, text_threshold=No
     image = image.to(device)
     with torch.no_grad():
         outputs = model(image[None], captions=[caption])
+
     logits = outputs["pred_logits"].sigmoid()[0]  # (nq, 256)
     boxes = outputs["pred_boxes"][0]  # (nq, 4)
 
@@ -169,7 +170,16 @@ if __name__ == "__main__":
                         ")
 
     parser.add_argument("--cpu-only", action="store_true", help="running on cpu only!, default=False")
-    args = parser.parse_args()
+
+    argv = [
+        "-c", "/Users/shreyas/Developer/GitHub/GroundingDINO/groundingdino/config/GroundingDINO_SwinT_OGC.py",
+        "-p", "/Users/shreyas/Downloads/groundingdino_swint_ogc.pth",
+        "-i", "/Users/shreyas/Developer/GitHub/GroundingDINO/.asset/cats.png",
+        "-o", "/Users/shreyas/Developer/GitHub/GroundingDINO/logs/now",
+        "-t", "cat .",
+        "--cpu-only"]
+
+    args = parser.parse_args(argv)
 
     # cfg
     config_file = args.config_file  # change the path of the model config file

@@ -287,36 +287,57 @@ class Transformer(nn.Module):
             )
             output_memory = self.enc_output_norm(self.enc_output(output_memory))
 
-            if text_dict is not None:
+            if text_dict is not None: #
                 enc_outputs_class_unselected = self.enc_out_class_embed(output_memory, text_dict)
             else:
                 enc_outputs_class_unselected = self.enc_out_class_embed(output_memory)
 
+            # enc_outputs_class_unselected is:
+            # 20906 x 256
+            # image patches => input text tokens (padded to 256)
+
             topk_logits = enc_outputs_class_unselected.max(-1)[0]
+            # 20906 [x 1]
+            # topk_logits: image patches => best matching text
+
+            # essentially positional embeddings
+            # NOTE: Why converting image embedding?
             enc_outputs_coord_unselected = (
                 self.enc_out_bbox_embed(output_memory) + output_proposals
             )  # (bs, \sum{hw}, 4) unsigmoid
             topk = self.num_queries
 
+            # 900 top matching patches
             topk_proposals = torch.topk(topk_logits, topk, dim=1)[1]  # bs, nq
+            # NOTE: TODO: THIS IS ITTTT ^
+            # NOTE: extracting indices of topk logits
 
             # gather boxes
+
             refpoint_embed_undetach = torch.gather(
                 enc_outputs_coord_unselected, 1, topk_proposals.unsqueeze(-1).repeat(1, 1, 4)
             )  # unsigmoid
             refpoint_embed_ = refpoint_embed_undetach.detach()
+            # NOTE: ^ same as
+            # enc_outputs_coord_unselected[:, topk_proposals.squeeze()]
+
             init_box_proposal = torch.gather(
                 output_proposals, 1, topk_proposals.unsqueeze(-1).repeat(1, 1, 4)
             ).sigmoid()  # sigmoid
+            # NOTE: ^ same as
+            # output_proposals[:, topk_proposals.squeeze()]
 
             # gather tgt
             tgt_undetach = torch.gather(
                 output_memory, 1, topk_proposals.unsqueeze(-1).repeat(1, 1, self.d_model)
             )
             if self.embed_init_tgt:
+                # some 900 embeddings
                 tgt_ = (
                     self.tgt_embed.weight[:, None, :].repeat(1, bs, 1).transpose(0, 1)
                 )  # nq, bs, d_model
+
+                # NOTE: Nope, it is bs, nq, d_model
             else:
                 tgt_ = tgt_undetach.detach()
 
@@ -354,6 +375,7 @@ class Transformer(nn.Module):
             raise NotImplementedError("unknown two_stage_type {}".format(self.two_stage_type))
         #########################################################
         # End preparing tgt
+        # NOTE: TGT MEANS QUERIES
         # - tgt: bs, NQ, d_model
         # - refpoint_embed(unsigmoid): bs, NQ, d_model
         #########################################################
@@ -367,8 +389,8 @@ class Transformer(nn.Module):
             memory_key_padding_mask=mask_flatten,
             pos=lvl_pos_embed_flatten.transpose(0, 1),
             refpoints_unsigmoid=refpoint_embed.transpose(0, 1),
-            level_start_index=level_start_index,
-            spatial_shapes=spatial_shapes,
+            level_start_index=level_start_index, # offsets of imgs for sum of h*w
+            spatial_shapes=spatial_shapes, # shapes of diff resolutions
             valid_ratios=valid_ratios,
             tgt_mask=attn_mask,
             memory_text=text_dict["encoded_text"],

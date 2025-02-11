@@ -215,7 +215,7 @@ class GroundingDINO(nn.Module):
         if hasattr(self, 'features'):
             del self.features
         if hasattr(self,'poss'):
-            del self.poss 
+            del self.poss
 
     def set_image_features(self, features , poss):
         self.features = features
@@ -346,7 +346,16 @@ class GroundingDINO(nn.Module):
                 for layer_cls_embed, layer_hs in zip(self.class_embed, hs)
             ]
         )
-        out = {"pred_logits": outputs_class[-1], "pred_boxes": outputs_coord_list[-1]}
+        out = {"pred_logits": outputs_class[-1], "pred_boxes": outputs_coord_list[-1]}#, "pred_representation": []}
+
+        # bipartite loss
+
+        # pred_boxes < L1 & IOU
+        # representation < contrastive loss
+
+        # 2 iterations <embedding>
+        # 1. optimise boxes
+        # 2. optimise representation
 
         # # for intermediate outputs
         # if self.aux_loss:

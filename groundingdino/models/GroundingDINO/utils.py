@@ -99,7 +99,8 @@ def gen_encoder_output_proposals(
         _cur += H_ * W_
     # import ipdb; ipdb.set_trace()
     output_proposals = torch.cat(proposals, 1)
-    output_proposals_valid = ((output_proposals > 0.01) & (output_proposals < 0.99)).all(
+    # output_proposals_valid = ((output_proposals > 0.01) & (output_proposals < 0.99)).all(
+    output_proposals_valid = ((0.01 < output_proposals) & (output_proposals < 0.99)).all(
         -1, keepdim=True
     )
     output_proposals = torch.log(output_proposals / (1 - output_proposals))  # unsigmoid
